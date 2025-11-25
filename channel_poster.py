@@ -239,9 +239,29 @@ async def main():
     logger.info("  - 19:00 🤖 Technology ↔️ 🌿 Nature (alternating)")
     logger.info("  - 22:30 🌌 Space (mysticism of the night)")
     
+    # Check bot permissions in channel
+    logger.info(f"🔍 Checking bot permissions in channel {CHANNEL_USERNAME}...")
+    try:
+        chat = await bot.get_chat(CHANNEL_USERNAME)
+        logger.info(f"✅ Channel found: {chat.title}")
+        
+        bot_member = await bot.get_chat_member(CHANNEL_USERNAME, bot.id)
+        logger.info(f"✅ Bot status in channel: {bot_member.status}")
+        
+        if bot_member.status not in ['administrator', 'creator']:
+            logger.warning(f"⚠️ Bot is not admin in channel! Status: {bot_member.status}")
+            logger.warning(f"⚠️ Bot needs to be ADMIN with 'Post messages' permission!")
+    except Exception as e:
+        logger.error(f"❌ Cannot access channel {CHANNEL_USERNAME}: {e}")
+        logger.error(f"❌ Make sure bot is added to channel as ADMIN!")
+    
     # Start scheduler
     scheduler.start()
     logger.info("✅ Scheduler started!")
+    logger.info("⏰ Next scheduled posts:")
+    for job in scheduler.get_jobs():
+        next_run = job.next_run_time
+        logger.info(f"   - {job.name}: {next_run}")
     
     # Test post immediately (uses current time to determine topic)
     logger.info("🧪 Creating test post immediately...")
@@ -250,8 +270,9 @@ async def main():
     logger.info(f"Test post will use topic for hour {current_hour}: {test_topic}")
     try:
         await create_and_post(fixed_topic=test_topic)
+        logger.info("✅ Test post sent successfully!")
     except Exception as e:
-        logger.error(f"Test post failed: {e}")
+        logger.error(f"❌ Test post failed: {e}", exc_info=True)
     
     try:
         # Keep running
