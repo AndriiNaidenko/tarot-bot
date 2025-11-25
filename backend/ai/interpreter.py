@@ -31,9 +31,9 @@ class TarotInterpreter:
     """Generates mystical AI interpretations for Tarot readings using GPT-4o"""
     
     def __init__(self):
-        self.api_key = os.getenv("EMERGENT_LLM_KEY")
+        self.api_key = os.getenv("OPENAI_API_KEY")
         if not self.api_key:
-            self.api_key = os.getenv("OPENAI_API_KEY")
+            raise ValueError("OPENAI_API_KEY not found in environment variables")
         
         self.system_message = """Ты — живой, мягкий и мудрый Таро-проводник.
 Твоя задача — чтобы человек почувствовал настоящее присутствие, внимание и эмоциональное тепло.

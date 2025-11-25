@@ -10,7 +10,9 @@ class PostGenerator:
     """Generates mystical channel posts based on news"""
     
     def __init__(self):
-        self.api_key = os.getenv("EMERGENT_LLM_KEY") or os.getenv("OPENAI_API_KEY")
+        self.api_key = os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise ValueError("OPENAI_API_KEY not found in environment variables")
         
         self.system_message = """Ты — автор Telegram-канала, который соединяет мировые события через призму Таро и мистики.
 
