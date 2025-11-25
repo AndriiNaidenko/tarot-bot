@@ -1,9 +1,16 @@
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.filters import Command
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 import logging
+
+from backend.bot.subscription_check import (
+    check_user_subscribed, 
+    get_subscription_keyboard,
+    SUBSCRIPTION_MESSAGE,
+    REQUIRED_CHANNEL
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +72,24 @@ def get_zodiac_keyboard():
 
 
 @router.message(Command("start"))
-async def cmd_start(message: Message, state: FSMContext, db):
-    """Handle /start command - registration or welcome back"""
+async def cmd_start(message: Message, state: FSMContext, db, bot: Bot):
+    """Handle /start command - check subscription first, then registration or welcome back"""
     user_id = message.from_user.id
+    
+    # Check if user is subscribed to required channel
+    is_subscribed = await check_user_subscribed(bot, user_id)
+    
+    if not is_subscribed:
+        # User not subscribed - show subscription requirement
+        await message.answer(
+            SUBSCRIPTION_MESSAGE.format(channel=REQUIRED_CHANNEL),
+            reply_markup=get_subscription_keyboard(),
+            parse_mode="Markdown"
+        )
+        logger.info(f"User {user_id} not subscribed to {REQUIRED_CHANNEL}")
+        return
+    
+    # User is subscribed - continue with normal flow
     user = await db.get_user(user_id)
     
     if user:
@@ -209,6 +231,32 @@ async def process_zodiac(message: Message, state: FSMContext, db):
     
     await state.clear()
     logger.info(f"User registered: {user_id} - {name} - {zodiac}")
+
+
+@router.callback_query(F.data == "check_subscription")
+async def callback_check_subscription(callback: CallbackQuery, state: FSMContext, db, bot: Bot):
+    """Handle 'I subscribed' button click"""
+    user_id = callback.from_user.id
+    
+    # Check subscription again
+    is_subscribed = await check_user_subscribed(bot, user_id)
+    
+    if is_subscribed:
+        # User subscribed - allow access
+        await callback.message.edit_text(
+            "✅ Отлично! Ты подписался на канал!\n\n"
+            "Теперь можешь пользоваться всеми функциями бота. 🔮\n\n"
+            "Отправь /start для начала работы."
+        )
+        await callback.answer("✅ Подписка подтверждена!")
+        logger.info(f"User {user_id} subscription confirmed")
+    else:
+        # Still not subscribed
+        await callback.answer(
+            "❌ Ты ещё не подписался на канал! Подпишись и нажми кнопку снова.",
+            show_alert=True
+        )
+        logger.info(f"User {user_id} still not subscribed")
 
 
 @router.message(Command("help"))

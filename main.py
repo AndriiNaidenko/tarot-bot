@@ -44,10 +44,11 @@ async def main():
     dp.include_router(start.router)
     dp.include_router(readings.router)
     
-    # Middleware to pass database to handlers
+    # Middleware to pass database and bot to handlers
     @dp.update.middleware()
     async def db_middleware(handler, event, data):
         data['db'] = db
+        data['bot'] = bot
         return await handler(event, data)
     
     logger.info("🔮 Tarot Bot starting...")
