@@ -1,9 +1,8 @@
 import os
 from dotenv import load_dotenv
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from openai import OpenAI
 from typing import List, Dict
 import logging
-import uuid
 from datetime import datetime
 
 # Load environment variables
@@ -71,12 +70,7 @@ class TarotInterpreter:
     
     async def interpret_single_card(self, card: Dict, question: str = None) -> str:
         """Generate interpretation for a single card"""
-        session_id = str(uuid.uuid4())
-        chat = LlmChat(
-            api_key=self.api_key,
-            session_id=session_id,
-            system_message=self.system_message
-        ).with_model("openai", "gpt-4o")
+        client = OpenAI(api_key=self.api_key)
         
         is_reversed = card.get('is_reversed', False)
         reversed_text = "перевёрнутая" if is_reversed else "прямая"
@@ -106,20 +100,20 @@ class TarotInterpreter:
 
 ВАЖНО: Отвечай СТРОГО на русском языке! Никакого украинского!"""
         
-        message = UserMessage(text=prompt)
-        response = await chat.send_message(message)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": self.system_message},
+                {"role": "user", "content": prompt}
+            ]
+        )
         
         logger.info(f"Generated interpretation for {card['name_ru']}")
-        return response
+        return response.choices[0].message.content
     
     async def interpret_three_card_spread(self, cards: List[Dict], question: str = None) -> str:
         """Generate interpretation for 3-card spread (Past-Present-Future)"""
-        session_id = str(uuid.uuid4())
-        chat = LlmChat(
-            api_key=self.api_key,
-            session_id=session_id,
-            system_message=self.system_message
-        ).with_model("openai", "gpt-4o")
+        client = OpenAI(api_key=self.api_key)
         
         positions = ["Прошлое", "Настоящее", "Будущее"]
         cards_info = []
@@ -174,20 +168,20 @@ class TarotInterpreter:
 
 ОБЯЗАТЕЛЬНО: Весь ответ только на русском языке! НЕ используй украинский!"""
         
-        message = UserMessage(text=prompt)
-        response = await chat.send_message(message)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": self.system_message},
+                {"role": "user", "content": prompt}
+            ]
+        )
         
-        logger.info(f"Generated 3-card interpretation")
-        return response
+        logger.info("Generated 3-card interpretation")
+        return response.choices[0].message.content
     
     async def interpret_deep_spread(self, cards: List[Dict], spread_type: str, question: str = None) -> str:
         """Generate interpretation for deep spreads (5, 7 cards or Deep Path)"""
-        session_id = str(uuid.uuid4())
-        chat = LlmChat(
-            api_key=self.api_key,
-            session_id=session_id,
-            system_message=self._get_deep_spread_system_message()
-        ).with_model("openai", "gpt-4o")
+        client = OpenAI(api_key=self.api_key)
         
         time_context = get_time_context()
         
@@ -251,20 +245,20 @@ class TarotInterpreter:
 Будь как наставник, который помогает увидеть путь целиком.
 Объём: 350-450 слов. Используй 1-2 эмодзи."""
         
-        message = UserMessage(text=prompt)
-        response = await chat.send_message(message)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": self._get_deep_spread_system_message()},
+                {"role": "user", "content": prompt}
+            ]
+        )
         
         logger.info(f"Generated deep spread interpretation: {spread_type}")
-        return response
+        return response.choices[0].message.content
     
     async def interpret_personal_energy(self, user_data: Dict) -> str:
         """Interpret user's personal energetics"""
-        session_id = str(uuid.uuid4())
-        chat = LlmChat(
-            api_key=self.api_key,
-            session_id=session_id,
-            system_message=self._get_energy_system_message()
-        ).with_model("openai", "gpt-4o")
+        client = OpenAI(api_key=self.api_key)
         
         time_context = get_time_context()
         
@@ -309,11 +303,16 @@ class TarotInterpreter:
 
 ОБЯЗАТЕЛЬНО: Весь ответ только на русском языке! НЕ используй украинский!"""
         
-        message = UserMessage(text=prompt)
-        response = await chat.send_message(message)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": self._get_energy_system_message()},
+                {"role": "user", "content": prompt}
+            ]
+        )
         
         logger.info(f"Generated personal energy reading for {name}")
-        return response, cards
+        return response.choices[0].message.content, cards
     
     def _get_deep_spread_system_message(self) -> str:
         """System message for deep spreads"""

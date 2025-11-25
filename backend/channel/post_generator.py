@@ -1,7 +1,6 @@
 import logging
 import os
-import uuid
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from openai import OpenAI
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -61,12 +60,7 @@ class PostGenerator:
         Returns:
             str: Generated post text
         """
-        session_id = str(uuid.uuid4())
-        chat = LlmChat(
-            api_key=self.api_key,
-            session_id=session_id,
-            system_message=self.system_message
-        ).with_model("openai", "gpt-4o")
+        client = OpenAI(api_key=self.api_key)
         
         # Get time context
         if time_of_day is None:
@@ -111,11 +105,17 @@ class PostGenerator:
 НЕ копируй примеры. Создай уникальный пост на основе этих новостей.
 Пиши на русском языке, естественно и живо."""
         
-        message = UserMessage(text=prompt)
-        response = await chat.send_message(message)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": self.system_message},
+                {"role": "user", "content": prompt}
+            ]
+        )
         
-        logger.info(f"Generated post for topic '{topic}' ({len(response)} chars)")
-        return response.strip()
+        result = response.choices[0].message.content
+        logger.info(f"Generated post for topic '{topic}' ({len(result)} chars)")
+        return result.strip()
     
     def validate_post(self, post: str) -> bool:
         """Validate generated post"""
