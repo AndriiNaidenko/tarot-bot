@@ -57,6 +57,10 @@ class Database:
         last_reset = limits.get("last_reset", datetime.now(timezone.utc))
         now = datetime.now(timezone.utc)
         
+        # Make sure last_reset is timezone-aware (for old database records)
+        if last_reset.tzinfo is None:
+            last_reset = last_reset.replace(tzinfo=timezone.utc)
+        
         # Reset daily limits if it's a new day
         if (now - last_reset).days >= 1:
             await self.users.update_one(
