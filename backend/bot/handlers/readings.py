@@ -1,6 +1,6 @@
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message, ReplyKeyboardRemove, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message, ReplyKeyboardRemove, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from backend.tarot.cards import TarotDeck
@@ -28,6 +28,65 @@ def get_back_to_menu_keyboard():
     return keyboard
 
 
+def get_premium_keyboard():
+    """Keyboard with link to premium"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="💎 Купить Premium",
+                url="https://t.me/taro209"
+            )
+        ]
+    ])
+    return keyboard
+
+
+async def check_limits(message: Message, db, reading_type: str) -> bool:
+    """
+    Check if user can proceed with reading
+    Returns True if can proceed, False if limit reached
+    """
+    user_id = message.from_user.id
+    can_proceed, limit_type = await db.check_and_update_limits(user_id, reading_type)
+    
+    if not can_proceed:
+        if limit_type == "premium_only":
+            await message.answer(
+                "💎 **Эта функция доступна только в Premium!**\n\n"
+                "**Premium включает:**\n"
+                "✨ Расклад 5 карт - глубокий анализ\n"
+                "✨ Расклад 7 карт - детальное понимание\n"
+                "✨ Глубокий путь - твоя судьба\n"
+                "✨ Личная энергия - анализ состояния\n"
+                "✨ Безлимитные простые расклады\n\n"
+                "💬 Для покупки Premium напиши в канал @taro209\n"
+                "(Открыты личные сообщения)",
+                reply_markup=get_premium_keyboard(),
+                parse_mode="Markdown"
+            )
+        elif limit_type == "card_of_day":
+            await message.answer(
+                "⏳ **Лимит исчерпан!**\n\n"
+                "Карта дня доступна **2 раза в сутки** для бесплатного доступа.\n\n"
+                "💎 **Premium:** безлимитный доступ!\n"
+                "💬 Напиши в @taro209 для покупки Premium",
+                reply_markup=get_premium_keyboard(),
+                parse_mode="Markdown"
+            )
+        elif limit_type == "simple_spread":
+            await message.answer(
+                "⏳ **Лимит исчерпан!**\n\n"
+                "Простые расклады доступны **2 раза в сутки** для бесплатного доступа.\n\n"
+                "💎 **Premium:** безлимитный доступ к всем раскладам!\n"
+                "💬 Напиши в @taro209 для покупки Premium",
+                reply_markup=get_premium_keyboard(),
+                parse_mode="Markdown"
+            )
+        return False
+    
+    return True
+
+
 @router.message(F.text == "✨ Карта дня")
 async def card_of_day(message: Message, db):
     """Handle "Card of the Day" request"""
@@ -38,7 +97,9 @@ async def card_of_day(message: Message, db):
         await message.answer("Сначала нужно зарегистрироваться. Нажми /start")
         return
     
-    # UNLIMITED ACCESS - No limits check
+    # Check limits
+    if not await check_limits(message, db, "card_of_day"):
+        return
     
     # Show "thinking" status with name
     name = user.get('name', 'друг мой')
@@ -108,6 +169,10 @@ async def one_question_start(message: Message, state: FSMContext, db):
         await message.answer("Сначала нужно зарегистрироваться. Нажми /start")
         return
     
+    # Check limits
+    if not await check_limits(message, db, "one_question"):
+        return
+    
     name = user.get('name', 'друг')
     
     # Ask for question
@@ -138,9 +203,11 @@ async def three_card_spread_start(message: Message, state: FSMContext, db):
         await message.answer("Сначала нужно зарегистрироваться. Нажми /start")
         return
     
-    name = user.get('name', 'друг')
+    # Check limits
+    if not await check_limits(message, db, "three_card_spread"):
+        return
     
-    # UNLIMITED ACCESS - No limits check
+    name = user.get('name', 'друг')
     
     # Ask for question
     cancel_keyboard = ReplyKeyboardMarkup(
@@ -350,6 +417,10 @@ async def tarot_advice(message: Message, db):
         await message.answer("Сначала нужно зарегистрироваться. Нажми /start")
         return
     
+    # Check limits
+    if not await check_limits(message, db, "tarot_advice"):
+        return
+    
     name = user.get('name', 'друг')
     
     # Show "thinking" status
@@ -457,6 +528,10 @@ async def deep_spread_start(message: Message, state: FSMContext, db):
         await message.answer("Сначала нужно зарегистрироваться. Нажми /start")
         return
     
+    # Check limits - PREMIUM ONLY
+    if not await check_limits(message, db, "deep_spread"):
+        return
+    
     name = user.get('name', 'друг')
     
     # Show spread type selection
@@ -526,6 +601,10 @@ async def personal_energy(message: Message, db):
     
     if not user:
         await message.answer("Сначала нужно зарегистрироваться. Нажми /start")
+        return
+    
+    # Check limits - PREMIUM ONLY
+    if not await check_limits(message, db, "personal_energy"):
         return
     
     name = user.get('name', 'друг')

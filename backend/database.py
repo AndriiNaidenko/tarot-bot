@@ -42,6 +42,67 @@ class Database:
             {"$set": {"zodiac_sign": zodiac}}
         )
     
+    async def check_and_update_limits(self, user_id: int, reading_type: str) -> tuple[bool, str]:
+        """
+        Check if user can make a reading and update limits
+        Returns: (can_proceed, message)
+        """
+        user = await self.get_user(user_id)
+        
+        # Premium users have no limits
+        if user.get("premium", False):
+            return True, ""
+        
+        limits = user.get("limits", {})
+        last_reset = limits.get("last_reset", datetime.now(timezone.utc))
+        now = datetime.now(timezone.utc)
+        
+        # Reset daily limits if it's a new day
+        if (now - last_reset).days >= 1:
+            await self.users.update_one(
+                {"_id": user_id},
+                {"$set": {
+                    "limits.daily_cards_used": 0,
+                    "limits.simple_spreads_used": 0,
+                    "limits.last_reset": now
+                }}
+            )
+            limits = {"daily_cards_used": 0, "simple_spreads_used": 0}
+        
+        # Check limits based on reading type
+        if reading_type == "card_of_day":
+            if limits.get("daily_cards_used", 0) >= 2:
+                return False, "card_of_day"
+        elif reading_type in ["one_question", "three_card_spread", "advice", "tarot_advice"]:
+            # Simple spreads: limited to 2 per day for free users
+            if limits.get("simple_spreads_used", 0) >= 2:
+                return False, "simple_spread"
+        elif reading_type in ["deep_spread", "personal_energy"]:
+            # Premium only features
+            return False, "premium_only"
+        
+        # Update limits
+        if reading_type == "card_of_day":
+            await self.users.update_one(
+                {"_id": user_id},
+                {"$inc": {"limits.daily_cards_used": 1}}
+            )
+        elif reading_type in ["one_question", "three_card_spread", "advice", "tarot_advice"]:
+            await self.users.update_one(
+                {"_id": user_id},
+                {"$inc": {"limits.simple_spreads_used": 1}}
+            )
+        
+        return True, ""
+    
+    async def set_premium(self, user_id: int, is_premium: bool = True):
+        """Set user premium status"""
+        await self.users.update_one(
+            {"_id": user_id},
+            {"$set": {"premium": is_premium}}
+        )
+        logger.info(f"User {user_id} premium status set to: {is_premium}")
+    
     async def save_reading(self, user_id: int, reading_type: str, cards: List[Dict], interpretation: str, question: str = None):
         reading = {
             "user_id": user_id,
